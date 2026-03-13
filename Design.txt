@@ -1,0 +1,203 @@
+Target Orders Extractor - Design Document
+
+1. File Structure:
+   - manifest.json: Extension configuration, permissions, and content script injection rules
+   - background.js: Main service worker entry point with modular imports
+   - modules/: Modular background script components
+     - messageHandlers.js: Handles all incoming messages from popup and content scripts
+     - orderProcessor.js: Processes order pages and manages existing tabs
+     - contentScriptFunctions.js: Functions executed in content script context
+     - extractionRunner.js: Coordinates extraction logic execution
+     - receiptModal.js: Manages receipt modal UI and CSV preview
+   - content.js: Main content script for order extraction, pagination, and detailed processing
+   - popup.html: Rich user interface for date range selection, progress tracking, and results display
+   - popup.js: Manages UI interactions, progress updates, and coordinates with content script
+   - htmlSaver.js: Utility for saving and managing order HTML content in browser storage
+   - saveOrderHtml.js: HTML processing utilities for order data extraction and CSV generation
+   - temp.html: Temporary file for testing and development
+
+2. Core Components:
+
+   A. Content Script (content.js):
+      - Order Discovery:
+        * Identifies order elements on the page using DOM queries
+        * Handles pagination by clicking 'Load more orders' button
+        * Tracks loading progress and detects when new content is loaded
+        * Switches between Online and In-store order tabs
+
+      - Order Processing:
+        * Extracts order URLs and basic information from order cards
+        * Processes orders sequentially with rate limiting and retry logic
+        * Coordinates with background script for detailed order page extraction
+        * Handles timeouts and error recovery during processing
+
+      - Data Management:
+        * Filters orders by user-specified date range
+        * Aggregates all order items into structured format
+        * Converts order data to CSV format for export
+        * Downloads CSV files automatically
+
+      - Communication:
+        * Listens for filter requests from popup
+        * Sends real-time progress updates during processing
+        * Returns comprehensive results including items, CSV, and statistics
+
+   B. Background Script (background.js + modules/):
+      - Main Entry Point (background.js):
+        * Imports and initializes all modular components
+        * Sets up message handling system
+        * Handles receipt data messages with CSV preview functionality
+        * Provides showReceiptCsvPreview function for content script execution
+
+      - Message Handlers (modules/messageHandlers.js):
+        * Processes 'openPopup' requests for extension popup management
+        * Handles 'processOrderPage' requests for new order page processing
+        * Manages 'processCurrentPage' requests for active tab processing
+        * Coordinates 'generateCSV' requests for bulk CSV generation
+        * Provides error handling and response management for all message types
+
+      - Order Processor (modules/orderProcessor.js):
+        * Implements processOrderPage for new tab creation and management
+        * Provides processExistingTab for current active tab processing
+        * Handles tab lifecycle, timeout management, and retry logic
+        * Manages cleanup operations and resource management
+
+      - Content Script Functions (modules/contentScriptFunctions.js):
+        * Contains all functions that execute in content script context
+        * Includes receipt button clicking and modal interaction logic
+        * Provides Target-specific data extraction helpers
+        * Handles both store receipt and invoice page data extraction
+
+      - Extraction Runner (modules/extractionRunner.js):
+        * Coordinates the execution of extraction logic
+        * Manages the flow between different extraction stages
+        * Handles receipt modal interactions and data collection
+
+      - Receipt Modal (modules/receiptModal.js):
+        * Manages receipt modal UI creation and display
+        * Provides CSV preview functionality for receipt data
+        * Handles user interactions with receipt preview modal
+
+   C. Popup Interface (popup.html + popup.js):
+      - Enhanced User Interface:
+        * Date range selection with default 30-day period
+        * Real-time progress tracking with visual progress bars
+        * Detailed results display with sortable item tables
+        * CSV download functionality with automatic file naming
+
+      - Progress Management:
+        * Shows processing status with current/total counts
+        * Displays detailed progress information and statistics
+        * Handles processing timeouts and error states
+        * Provides user feedback during long operations
+
+      - Results Presentation:
+        * Displays comprehensive order and item information
+        * Shows processing statistics (orders, items, success/failure rates)
+        * Enables CSV file download with proper formatting
+        * Handles both successful and error scenarios
+
+   D. HTML Processing Utilities:
+      - htmlSaver.js:
+        * Saves order HTML content to browser storage
+        * Manages storage keys and metadata
+        * Provides utilities for retrieving and clearing saved orders
+
+      - saveOrderHtml.js:
+        * Cleans HTML content by removing script tags
+        * Extracts structured order data from HTML
+        * Generates properly formatted CSV output
+        * Handles HTML parsing and data transformation
+
+3. Data Flow:
+   1. User selects date range in popup and clicks 'Extract Orders'
+   2. Popup validates dates and sends 'filterOrders' message to content script
+   3. Content script:
+      - Switches to Online orders tab and collects order URLs
+      - Switches to In-store orders tab and collects order URLs
+      - Filters all collected orders by the specified date range
+      - Processes each order sequentially using background script
+   4. Background script:
+      - Creates background tab for each order page
+      - Injects HTML processing scripts to extract detailed information
+      - Saves complete order HTML to browser storage
+      - Returns structured order data (items, prices, metadata)
+   5. Content script:
+      - Aggregates all order items into unified format
+      - Generates CSV content with proper headers and formatting
+      - Downloads CSV file automatically with timestamp
+      - Sends progress updates throughout the process
+   6. Popup displays:
+      - Real-time progress with current/total counts
+      - Processing statistics when complete
+      - Download link for CSV file
+      - Detailed results table (optional)
+
+4. Key Features:
+   - Comprehensive Order Extraction:
+     * Processes both Online and In-store orders
+     * Extracts detailed item information including names, quantities, prices
+     * Handles order pagination automatically
+     * Supports custom date range filtering
+   - Advanced Processing Pipeline:
+     * Background tab processing for detailed order pages
+     * HTML content preservation for data integrity
+     * Rate limiting and retry logic for reliability
+     * Chunked storage for large HTML content
+   - Rich User Experience:
+     * Real-time progress tracking with visual indicators
+     * Comprehensive results display with sortable tables
+     * Automatic CSV generation and download
+     * Detailed error reporting and recovery
+   - Data Management:
+     * Browser storage for order HTML content
+     * Structured data extraction from HTML
+     * CSV export with proper formatting and headers
+     * Metadata tracking and organization
+   - Performance Optimized:
+     * Sequential processing with controlled delays
+     * Background processing to avoid blocking UI
+     * Efficient DOM parsing and data extraction
+     * Memory management for large datasets
+   - Privacy & Security:
+     * Local browser storage only (no external data transmission)
+     * Complete HTML preservation for verification
+     * No personal data collection beyond order information
+     * Secure tab management and cleanup
+
+5. Technical Details:
+   - Uses Chrome Extension Manifest V3 with ES modules support
+   - Implements modular Service Worker architecture for better maintainability
+   - Handles dynamic content loading and pagination
+   - Manages cross-tab communication and coordination
+   - Includes comprehensive error handling and recovery
+   - Supports HTML parsing and DOM manipulation
+   - Implements CSV generation with proper escaping
+   - Uses browser storage API for data persistence
+   - Handles large data sets with chunking strategies
+   - Modular design with separation of concerns
+   - Dynamic module imports for efficient resource loading
+   - Enhanced error handling with module-level isolation
+
+6. Usage Instructions:
+   1. Navigate to Target.com and log in to your account
+   2. Go to 'Orders' page in your Target account
+   3. Click the extension icon in the browser toolbar
+   4. Select start and end dates (defaults to last 30 days)
+   5. Click 'Extract Orders' button to begin comprehensive extraction
+   6. Monitor progress as the extension processes orders in the background
+   7. View processing statistics when complete
+   8. Download the generated CSV file with all order details
+   9. Review extracted data including items, prices, and order information
+
+7. Error Handling:
+   - Network timeouts and connection failures
+   - Missing order elements or page structure changes
+   - Invalid date ranges or malformed input
+   - Authentication issues and access restrictions
+   - Rate limiting from Target's servers
+   - Tab creation and management failures
+   - HTML parsing errors and malformed content
+   - Storage quota exceeded scenarios
+   - Script injection and execution failures
+   - CSV generation and file download errors
