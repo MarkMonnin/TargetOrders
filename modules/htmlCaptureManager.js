@@ -26,28 +26,43 @@ export class HTMLCaptureManager {
       
       // Create full path with subfolder
       const fullPath = `${this.downloadSubfolder}/${filename}`;
+      console.log(`📂 Intended path: ${fullPath}`);
       
-      // Method 1: Try to use Chrome's download API (if available)
-      if (chrome && chrome.downloads) {
-        try {
-          const blob = new Blob([htmlContent], { type: 'text/html' });
-          const url = URL.createObjectURL(blob);
-          
-          await chrome.downloads.download({
-            url: url,
-            filename: fullPath,
-            saveAs: false
-          });
-          
-          URL.revokeObjectURL(url);
-          console.log(`💾 File saved via Chrome API: ${fullPath}`);
+      // Method 1: Try to use Chrome's download API via background script
+      console.log('🔧 Attempting download via background script...');
+      try {
+        console.log('📤 Sending message to background script:', {
+          type: 'DOWNLOAD_FILE',
+          filename: filename,
+          fullPath: fullPath,
+          htmlContentLength: htmlContent.length,
+          metadataKeys: Object.keys(metadata)
+        });
+        
+        const response = await chrome.runtime.sendMessage({
+          type: 'DOWNLOAD_FILE',
+          filename: filename,
+          fullPath: fullPath,
+          htmlContent: htmlContent,
+          metadata: metadata
+        });
+        
+        console.log('📨 Received response from background script:', response);
+        
+        if (response && response.success) {
+          console.log(`✅ File saved via background script: ${fullPath} (ID: ${response.downloadId})`);
           return;
-        } catch (chromeError) {
-          console.log('⚠️ Chrome download API failed, falling back to manual method');
+        } else {
+          console.error('❌ Background script download failed:', response?.error);
+          console.log('⚠️ Falling back to manual method');
         }
+      } catch (messageError) {
+        console.error('❌ Message to background script failed:', messageError);
+        console.log('⚠️ Falling back to manual method');
       }
       
-      // Method 2: Manual download with data URL (avoids blob URL issues)
+      // Method 2: Manual download with data URL (fallback)
+      console.log('🔧 Using manual download method');
       const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent);
       
       const a = document.createElement('a');
@@ -60,7 +75,8 @@ export class HTMLCaptureManager {
       a.click();
       document.body.removeChild(a);
       
-      console.log(`💾 File saved via data URL: ${filename} (Chrome API would use: ${fullPath})`);
+      console.log(`💾 File saved via data URL: ${filename} (Background script would use: ${fullPath})`);
+      console.log('⚠️ Note: Manual download may not support subfolders - files may go to root Downloads folder');
       
     } catch (error) {
       console.error('❌ Failed to save to downloads:', error);

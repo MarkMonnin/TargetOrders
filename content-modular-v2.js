@@ -620,6 +620,56 @@ window.TargetOrdersDebug = {
     htmlCaptureManager.configureSaveLocation(true, true, subfolderName);
     console.log(`📂 Download subfolder set to: ${subfolderName}`);
     return true;
+  },
+  testDownloadsAPI: async () => {
+    if (!htmlCaptureManager) return null;
+    try {
+      console.log('🔧 Testing Chrome downloads API via background script...');
+      
+      // Test with a simple file via background script
+      const testContent = '<html><body><h1>Test File from Background Script</h1></body></html>';
+      const testFilename = 'test-background-download.html';
+      const testPath = `${htmlCaptureManager.downloadSubfolder}/${testFilename}`;
+      
+      console.log('📤 Sending test message to background script...');
+      
+      const response = await chrome.runtime.sendMessage({
+        type: 'DOWNLOAD_FILE',
+        filename: testFilename,
+        fullPath: testPath,
+        htmlContent: testContent,
+        metadata: { test: true, timestamp: new Date().toISOString() }
+      });
+      
+      console.log('📨 Received test response:', response);
+      
+      if (response && response.success) {
+        console.log(`✅ Test download successful: ${testPath} (ID: ${response.downloadId})`);
+        return { success: true, downloadId: response.downloadId, path: testPath };
+      } else {
+        console.log('❌ Test download failed:', response?.error);
+        return { success: false, error: response?.error || 'Unknown error' };
+      }
+    } catch (error) {
+      console.error('❌ Downloads API test failed:', error);
+      return { success: false, error: error.message };
+    }
+  },
+  testMessagePassing: async () => {
+    try {
+      console.log('🔧 Testing basic message passing to background script...');
+      
+      const response = await chrome.runtime.sendMessage({
+        type: 'TEST_MESSAGE',
+        data: 'Hello from content script!'
+      });
+      
+      console.log('📨 Test message response:', response);
+      return { success: true, response };
+    } catch (error) {
+      console.error('❌ Message passing test failed:', error);
+      return { success: false, error: error.message };
+    }
   }
 };
 

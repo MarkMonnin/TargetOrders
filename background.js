@@ -1,13 +1,91 @@
 // Background script - Main entry point
-// Handles tab operations and order HTML saving
-
+// Import modular components
+import { pageDetector } from './modules/pageTypeDetector.js';
+import { htmlCaptureManager } from './modules/htmlCaptureManager.js';
+import { pageLoadRouter } from './modules/pageLoadRouter.js';
+import { testingFramework } from './modules/testingFramework.js';
 import { setupMessageHandlers } from './modules/messageHandlers.js';
-import { processOrderPage } from './modules/orderProcessor.js';
 
-console.log('Background script loaded');
-
-// Set up message handlers
+// Initialize message handlers for popup communication
 setupMessageHandlers();
+
+// Handle download requests from content scripts
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log('📨 Background script received message:', message.type, message);
+  
+  if (message.type === 'DOWNLOAD_FILE') {
+    console.log('🔧 Processing download request:', {
+      filename: message.filename,
+      fullPath: message.fullPath,
+      htmlContentLength: message.htmlContent?.length,
+      sender: sender.tab?.url
+    });
+    
+    handleDownloadRequest(message, sender, sendResponse);
+    return true; // Keep the message channel open for async response
+  }
+  
+  if (message.type === 'TEST_MESSAGE') {
+    console.log('🧪 Received test message:', message.data);
+    sendResponse({ 
+      success: true, 
+      message: 'Hello from background script!',
+      received: message.data,
+      timestamp: new Date().toISOString()
+    });
+    return true;
+  }
+});
+
+/**
+ * Handle download requests from content scripts
+ * @param {Object} message - The download message
+ * @param {Object} sender - Message sender info
+ * @param {Function} sendResponse - Response function
+ */
+async function handleDownloadRequest(message, sender, sendResponse) {
+  try {
+    console.log(`🔧 Background script handling download: ${message.filename}`);
+    
+    if (!chrome.downloads) {
+      console.error('❌ Chrome downloads API not available in background script');
+      sendResponse({ 
+        success: false, 
+        error: 'Chrome downloads API not available' 
+      });
+      return;
+    }
+    
+    console.log('🔧 Attempting Chrome downloads API call...');
+    
+    // Use Chrome downloads API with full permissions
+    // Convert HTML content to data URL directly (no need for blob in service worker)
+    const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(message.htmlContent);
+    
+    const downloadId = await chrome.downloads.download({
+      url: dataUrl,
+      filename: message.fullPath,
+      saveAs: false
+    });
+    
+    console.log(`✅ File saved via background script: ${message.fullPath} (ID: ${downloadId})`);
+    
+    sendResponse({ 
+      success: true, 
+      downloadId, 
+      path: message.fullPath 
+    });
+    
+  } catch (error) {
+    console.error('❌ Background download failed:', error);
+    sendResponse({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+}
+
+console.log('🚀 Background script initialized with download support');
 
 // Listen for receipt data messages
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
