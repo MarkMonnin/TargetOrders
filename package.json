@@ -1,0 +1,24 @@
+{
+  "name": "target-orders-extension-tests",
+  "version": "1.0.0",
+  "description": "Offline test runner for Target Orders extension captured files",
+  "main": "test-runner.js",
+  "type": "module",
+  "scripts": {
+    "test": "node test-runner.js",
+    "test:help": "node test-runner.js --help",
+    "test:verbose": "node test-runner.js --verbose",
+    "test:custom": "node test-runner.js -i ./my-captures -o ./results"
+  },
+  "keywords": ["target", "orders", "extension", "testing", "html", "analysis"],
+  "author": "Target Orders Extension",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "bin": {
+    "target-orders-test": "./test-runner.js"
+  }
+}

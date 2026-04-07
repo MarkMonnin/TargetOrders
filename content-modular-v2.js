@@ -100,6 +100,10 @@ async function loadModules() {
   const { testingFramework: testFramework } = await import(chrome.runtime.getURL(`modules/testingFramework.js?t=${cacheBuster}`));
   testingFramework = testFramework;
   
+  // Import the file analyzer
+  const { fileAnalyzer: analyzer } = await import(chrome.runtime.getURL(`modules/fileAnalyzer.js?t=${cacheBuster}`));
+  fileAnalyzer = analyzer;
+  
   console.log('✅ All modules loaded successfully');
 }
 
@@ -668,6 +672,173 @@ window.TargetOrdersDebug = {
       return { success: true, response };
     } catch (error) {
       console.error('❌ Message passing test failed:', error);
+      return { success: false, error: error.message };
+    }
+  },
+  analyzeCapturedFiles: async () => {
+    try {
+      console.log('🔍 Analyzing captured files...');
+      
+      // Get list of captured files from storage
+      return new Promise((resolve) => {
+        chrome.storage.local.get(['htmlCaptureManager_captures'], (result) => {
+          const captures = result.htmlCaptureManager_captures || {};
+          const filePaths = Object.keys(captures).map(key => captures[key].filename);
+          
+          console.log(`📁 Found ${filePaths.length} captured files to analyze`);
+          
+          // Analyze each file
+          const analysisResults = [];
+          
+          filePaths.forEach(filePath => {
+            const captureData = captures[Object.keys(captures).find(key => captures[key].filename === filePath)];
+            if (captureData && captureData.htmlContent) {
+              const analysis = fileAnalyzer.analyzeFile(filePath, captureData.htmlContent);
+              analysisResults.push(analysis);
+            }
+          });
+          
+          // Display summary
+          const summary = fileAnalyzer.getAnalysisSummary();
+          console.log('\n📊 FILE ANALYSIS SUMMARY');
+          console.log('==========================');
+          console.log(`📁 Total Files: ${summary.totalFiles}`);
+          console.log(`✅ Success Rate: ${summary.successRate}%`);
+          console.log('📈 Page Types:', summary.pageTypes);
+          
+          if (summary.recommendations.length > 0) {
+            console.log('\n💡 RECOMMENDATIONS:');
+            summary.recommendations.forEach((rec, index) => {
+              console.log(`${index + 1}. ${rec}`);
+            });
+          }
+          
+          resolve({ 
+            success: true, 
+            summary, 
+            analysisResults,
+            recommendations: summary.recommendations 
+          });
+        });
+      });
+    } catch (error) {
+      console.error('❌ File analysis failed:', error);
+      return { success: false, error: error.message };
+    }
+  },
+  runOfflineTests: async () => {
+    try {
+      console.log('🧪 Running offline tests on captured files...');
+      
+      // This would work with actual files in Node.js environment
+      // For browser, we'll simulate the test process
+      console.log('📝 Note: Full offline testing requires Node.js environment');
+      console.log('📝 Current browser version provides test framework and analysis');
+      
+      // Get captured files for testing
+      return new Promise((resolve) => {
+        chrome.storage.local.get(['htmlCaptureManager_captures'], (result) => {
+          const captures = result.htmlCaptureManager_captures || {};
+          const filePaths = Object.keys(captures).map(key => captures[key].filename);
+          
+          if (filePaths.length === 0) {
+            console.log('📁 No captured files found for testing');
+            resolve({ success: false, error: 'No files to test' });
+            return;
+          }
+          
+          // Simulate test results
+          const testResults = {
+            summary: {
+              totalFiles: filePaths.length,
+              duplicatesFound: 0,
+              overallPassRate: 85, // Simulated
+              testResults: {
+                pageTypeDetection: { passRate: 90, score: 88 },
+                dataExtraction: { passRate: 85, score: 82 },
+                validation: { passRate: 80, score: 78 },
+                moduleTesting: { passRate: 85, score: 83 }
+              }
+            },
+            recommendations: [
+              {
+                priority: 'medium',
+                category: 'Testing',
+                description: 'Simulated test results - run in Node.js for actual testing',
+                action: 'Use Node.js test runner with captured files'
+              }
+            ],
+            timestamp: new Date().toISOString()
+          };
+          
+          console.log('\n🧪 OFFLINE TEST RESULTS (Simulated)');
+          console.log('===================================');
+          console.log(`📁 Total Files: ${testResults.summary.totalFiles}`);
+          console.log(`✅ Overall Pass Rate: ${testResults.summary.overallPassRate}%`);
+          
+          console.log('\n📊 CATEGORY RESULTS:');
+          console.log(`🔍 Page Detection: ${testResults.summary.testResults.pageTypeDetection.passRate}% (${testResults.summary.testResults.pageTypeDetection.score} avg score)`);
+          console.log(`📤 Data Extraction: ${testResults.summary.testResults.dataExtraction.passRate}% (${testResults.summary.testResults.dataExtraction.score} avg score)`);
+          console.log(`✅ Validation: ${testResults.summary.testResults.validation.passRate}% (${testResults.summary.testResults.validation.score} avg score)`);
+          console.log(`🔧 Module Testing: ${testResults.summary.testResults.moduleTesting.passRate}% (${testResults.summary.testResults.moduleTesting.score} avg score)`);
+          
+          console.log('\n💡 RECOMMENDATIONS:');
+          testResults.recommendations.forEach((rec, index) => {
+            const priority = rec.priority === 'high' ? '🔴' : rec.priority === 'medium' ? '🟡' : '🟢';
+            console.log(`${index + 1}. ${priority} ${rec.category}: ${rec.description}`);
+            console.log(`   Action: ${rec.action}`);
+          });
+          
+          resolve({ success: true, testResults });
+        });
+      });
+    } catch (error) {
+      console.error('❌ Offline tests failed:', error);
+      return { success: false, error: error.message };
+    }
+  },
+  cleanupDuplicates: async () => {
+    try {
+      console.log('🧹 Cleaning up duplicate files...');
+      
+      return new Promise((resolve) => {
+        chrome.storage.local.get(['htmlCaptureManager_captures'], (result) => {
+          const captures = result.htmlCaptureManager_captures || {};
+          const filePaths = Object.keys(captures).map(key => captures[key].filename);
+          
+          const duplicates = fileAnalyzer.findDuplicates(filePaths);
+          
+          if (duplicates.length === 0) {
+            console.log('✅ No duplicate files found');
+            resolve({ success: true, duplicatesFound: 0 });
+            return;
+          }
+          
+          console.log(`🔄 Found ${duplicates.length} duplicate groups:`);
+          duplicates.forEach(dup => {
+            console.log(`   ${dup.baseName}: ${dup.count} files`);
+            console.log(`   Recommendation: ${dup.recommendation}`);
+          });
+          
+          // Mark duplicates for cleanup (in real implementation would delete files)
+          const filesToKeep = new Set();
+          duplicates.forEach(dup => {
+            const latestFile = dup.files[dup.files.length - 1];
+            filesToKeep.add(latestFile);
+          });
+          
+          console.log(`📁 Keeping ${filesToKeep.size} files, marking ${duplicates.reduce((sum, dup) => sum + dup.count - 1, 0)} for cleanup`);
+          
+          resolve({ 
+            success: true, 
+            duplicatesFound: duplicates.length,
+            filesToKeep: Array.from(filesToKeep),
+            filesToCleanup: duplicates.reduce((sum, dup) => sum + dup.count - 1, 0)
+          });
+        });
+      });
+    } catch (error) {
+      console.error('❌ Duplicate cleanup failed:', error);
       return { success: false, error: error.message };
     }
   }
